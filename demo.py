@@ -1,18 +1,17 @@
 # import the necessary packages
-import numpy as np
-import argparse
-import imutils
 import pickle
+
 import cv2
-import tensorflow.compat.v1 as tf
-import os
+import imutils
+import numpy as np
+import tensorflow as tf
 from mtcnn import MTCNN
 
 import settings
 from src.align.face_detector import detect_face, align_face
+from src.embedding.embedding import Embedding
 from src.embedding.face_model import FaceModel
 
-tf.disable_v2_behavior()
 gpus = tf.config.experimental.list_physical_devices('GPU')
 if gpus:
     try:
@@ -27,9 +26,15 @@ if gpus:
         print(e)
 
 if __name__ == '__main__':
-    recognizer = pickle.loads(open('recognizer.pickle', "rb").read())
-    le = pickle.loads(open('le.pickle', "rb").read())
+    # recognizer = pickle.loads(open('output/recognizer.pickle', "rb").read())
+    # le = pickle.loads(open('output/le.pickle', "rb").read())
+    recognizer = pickle.loads(open('output/tf_recognizer.pickle', "rb").read())
+    le = pickle.loads(open('output/tf_le.pickle', "rb").read())
     detector = MTCNN()
+    tf_model = Embedding(model_fp=settings.FACE_DESCRIBER_MODEL_FP,
+                         input_tensor_names=settings.FACE_DESCRIBER_INPUT_TENSOR_NAMES,
+                         output_tensor_names=settings.FACE_DESCRIBER_OUTPUT_TENSOR_NAMES,
+                         device=settings.FACE_DESCRIBER_DEVICE)
     image = cv2.imread(
         'demo1.jpg')
     image = imutils.resize(image, width=600)
@@ -45,13 +50,11 @@ if __name__ == '__main__':
              aligned_face.box[0]:aligned_face.box[0] + aligned_face.box[2]
             ]
             output = cv2.resize(result, (112, 112))
-            output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
-            output = np.transpose(output, (2, 0, 1))
-            fm = FaceModel(settings.DEEPSIGHTFACE_DIR)
-            f1 = fm.get_feature(output)
-            f1 = np.expand_dims(f1, axis=0)
+            dropout_rate = 0.5
+            input_data = [np.expand_dims(output, axis=0), dropout_rate]
+            face_embedding = tf_model.inference(data=input_data)
 
-            preds = recognizer.predict_proba(f1)[0]
+            preds = recognizer.predict_proba(face_embedding[0])[0]
             j = np.argmax(preds)
             proba = preds[j]
             name = le.classes_[j]

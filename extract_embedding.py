@@ -3,15 +3,14 @@ import pickle
 
 import cv2
 import numpy as np
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 from imutils import paths
 from mtcnn import MTCNN
 
 import settings
 from src.align.face_detector import detect_face, align_face
-from src.embedding.face_model import FaceModel
+from src.embedding.embedding import Embedding
 
-tf.disable_v2_behavior()
 gpus = tf.config.experimental.list_physical_devices('GPU')
 if gpus:
     try:
@@ -28,7 +27,11 @@ if gpus:
 
 def run_extract_embedding():
     detector = MTCNN()
-    fm = FaceModel(settings.DEEPSIGHTFACE_DIR)
+    # fm = FaceModel(settings.DEEPSIGHTFACE_DIR)
+    tf_model = Embedding(model_fp=settings.FACE_DESCRIBER_MODEL_FP,
+                         input_tensor_names=settings.FACE_DESCRIBER_INPUT_TENSOR_NAMES,
+                         output_tensor_names=settings.FACE_DESCRIBER_OUTPUT_TENSOR_NAMES,
+                         device=settings.FACE_DESCRIBER_DEVICE)
     print("[INFO] quantifying faces...")
     imagePaths = list(paths.list_images('dataset/train'))
     knownEmbeddings = []
@@ -51,20 +54,19 @@ def run_extract_embedding():
             aligned_face = detect_face(detector, aligned)
             if aligned_face is not None:
                 result = aligned[
-                    aligned_face.box[1]:aligned_face.box[1] + aligned_face.box[3],
-                    aligned_face.box[0]:aligned_face.box[0] +
-                    aligned_face.box[2]
-                ]
+                         aligned_face.box[1]:aligned_face.box[1] + aligned_face.box[3],
+                         aligned_face.box[0]:aligned_face.box[0] + aligned_face.box[2]
+                         ]
                 output = cv2.resize(result, (112, 112))
-                output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
-                output = np.transpose(output, (2, 0, 1))
-                f1 = fm.get_feature(output)
+                dropout_rate = 0.5
+                input_data = [np.expand_dims(output, axis=0), dropout_rate]
+                prediction = tf_model.inference(data=input_data)
                 knownNames.append(name)
-                knownEmbeddings.append(f1)
+                knownEmbeddings.append(prediction[0].flatten())
                 total += 1
     print("[INFO] serializing {} encodings...".format(total))
     data = {"embeddings": knownEmbeddings, "names": knownNames}
-    f = open("embeddings.pickle", "wb")
+    f = open("output/tf_embeddings.pickle", "wb")
     f.write(pickle.dumps(data))
     f.close()
 
