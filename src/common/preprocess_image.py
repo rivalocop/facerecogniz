@@ -1,26 +1,53 @@
-from src.common.preprocess_image import get_face_attribute, align_image
-import cv2
-import tensorflow as tf
-from mtcnn import MTCNN
 import numpy as np
 from skimage import transform as trans
+import cv2
 
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-    try:
-        # Currently, memory growth needs to be the same across GPUs
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-        print(len(gpus), "Physical GPUs,", len(
-            logical_gpus), "Logical GPUs")
-    except RuntimeError as e:
-        # Memory growth must be set before GPUs have been initialized
-        print(e)
+def align_face(image, left_eye_coordinates,
+               right_eye_coordinates,
+               desiredLeftEye=(0.35, 0.35),
+               desiredFaceWidth=256,
+               desiredFaceHeight=None):
+    if desiredFaceHeight is None:
+        desiredFaceHeight = desiredFaceWidth
+
+    leftEyeCenter = np.asarray(left_eye_coordinates)
+    rightEyeCenter = np.asarray(right_eye_coordinates)
+
+    dY = rightEyeCenter[1] - leftEyeCenter[1]
+    dX = rightEyeCenter[0] - leftEyeCenter[0]
+    dist = np.sqrt((dX ** 2) + (dY ** 2))
+    angle = np.degrees(np.arctan2(dY, dX))
+
+    desiredRightEyeX = 1.0 - desiredLeftEye[0]
+
+    desiredDist = (desiredRightEyeX - desiredLeftEye[0])
+    desiredDist *= desiredFaceWidth
+    scale = desiredDist / dist
+
+    eyesCenter = ((leftEyeCenter[0] + rightEyeCenter[0]) // 2,
+                  (leftEyeCenter[1] + rightEyeCenter[1]) // 2)
+    M = cv2.getRotationMatrix2D(eyesCenter, angle, scale)
+
+    tX = desiredFaceWidth * 0.5
+    tY = desiredFaceHeight * desiredLeftEye[1]
+    M[0, 2] += (tX - eyesCenter[0])
+    M[1, 2] += (tY - eyesCenter[1])
+
+    (w, h) = (desiredFaceWidth, desiredFaceHeight)
+    output = cv2.warpAffine(image, M, (w, h),
+                            flags=cv2.INTER_CUBIC)
+    return output
 
 
-def preprocess(img, bbox=None, landmark=None):
+def get_face_attribute(face):
+    bbox = np.array(face['box'])
+    val = [value for position, value in face['keypoints'].items()]
+    points = np.asarray(val)
+    return bbox, points
+
+
+def align_image(img, bbox=None, landmark=None):
     M = None
     image_size = [112, 112]
     if landmark is not None:
@@ -76,21 +103,3 @@ def preprocess(img, bbox=None, landmark=None):
         # tform3.estimate(src, dst)
         # warped = trans.warp(img, tform3, output_shape=_shape)
         return warped
-
-
-def run_preprocess():
-    # facenet_md = FacenetModel()
-    detector = MTCNN()
-    image_path = 'example1.jpg'
-    image = cv2.imread(image_path)
-    faces = detector.detect_faces(image)
-    if len(faces) > 0:
-        face = faces[0]
-        bbox, points = get_face_attribute(face)
-        aligned_image = align_image(image, bbox, points)
-        output = cv2.resize(aligned_image, (112, 112))
-        cv2.imwrite('temp.png', output)
-
-
-if __name__ == '__main__':
-    run_preprocess()
