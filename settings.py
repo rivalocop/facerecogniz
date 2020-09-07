@@ -2,6 +2,7 @@ import os
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DEEPSIGHTFACE_DIR = BASE_DIR + '/models/model-r100-ii/model,0'
+OPENFACE_MODEL_PATH = BASE_DIR + '/models/nn4.small1.v1.t7'
 FACE_DESCRIBER_INPUT_TENSOR_NAMES = ['img_inputs:0', 'dropout_rate:0']
 FACE_DESCRIBER_OUTPUT_TENSOR_NAMES = ['resnet_v1_50/E_BN2/Identity:0']
 FACE_DESCRIBER_DEVICE = '/cpu:0'

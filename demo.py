@@ -1,6 +1,5 @@
 # import the necessary packages
 import numpy as np
-import argparse
 import imutils
 import pickle
 import cv2
@@ -29,6 +28,7 @@ if __name__ == '__main__':
         open('output/mxnet_recognizer.pickle', "rb").read())
     le = pickle.loads(open('output/mxnet_le.pickle', "rb").read())
     detector = MTCNN()
+    fm = FaceModel(settings.DEEPSIGHTFACE_DIR)
     image = cv2.imread(
         'demo1.jpg')
     image = imutils.resize(image, width=600)
@@ -37,11 +37,9 @@ if __name__ == '__main__':
         face = faces[0]
         bbox, points = get_face_attribute(face)
         aligned_image = align_image(image, bbox, points)
-        output = cv2.resize(aligned_image, (112, 112))
-        output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+        output = cv2.cvtColor(aligned_image, cv2.COLOR_BGR2RGB)
         output = np.transpose(output, (2, 0, 1))
 
-        fm = FaceModel(settings.DEEPSIGHTFACE_DIR)
         f1 = fm.get_feature(output)
         f1 = np.expand_dims(f1, axis=0)
 
