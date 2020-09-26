@@ -24,6 +24,7 @@ https://github.com/rivalocop/facerecogniz.git
 ```bash
 cd facerecogniz
 python3 -m venv .env
+source .env/bin/activate # activate environment
 pip install -r requirements.txt
 ```
 
